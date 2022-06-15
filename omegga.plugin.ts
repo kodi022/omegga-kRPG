@@ -1,7 +1,9 @@
-import OmeggaPlugin, { OL, PS, PC, OmeggaPlayer, ReadSaveObject, BrickV10 } from 'omegga';
-import * as database from './o.data';
+import OmeggaPlugin, { OL, PS, PC, OmeggaPlayer, ReadSaveObject, BrickV10, IPlayerPositions } from 'omegga';
+import { read_map } from './o.readbricks';
+//import * as database from 'ItemData/items';
 import * as definitions from './o.definitions';
-import * as fns from './o.functions';
+import battles from './o.functions';
+import miscfns from './o.miscfunctions';
 type Config = { foo: string };
 type Storage = { bar: string };
 
@@ -15,38 +17,17 @@ export default class Plugin implements OmeggaPlugin<Config, Storage> {
 
   async init() {
     const debug: boolean = this.config["Enable-Debug"];
+    const auth: OmeggaPlayer[] = this.config["Authorized-Users"];
 
-    const fns_battle = new fns.Battles(Omegga, this.config, this.store);
+    const fns_msc = new miscfns(Omegga);
+    const fns_btl = new battles(Omegga, this.config, this.store, fns_msc);
+  
+    await read_map(fns_btl, fns_msc, debug);
 
-    let brs: ReadSaveObject = await Omegga.getSaveData();
-    if (brs.version === 10) {
-      for (let brick of brs.bricks) {
-        if (brick.components.BCD_Interact.Message) {
-          const compo_str: string[] = brick.components.BCD_Interact.ConsoleTag.split(" ");
-          if (compo_str[0].startsWith(".")) {
-            switch (compo_str[0]) {
-              case ".spawnpoint": {
-                Omegga.broadcast("Added spawn");
-                fns_battle.spawnpoints.push([brick.position[0], brick.position[1], brick.position[2] + 60])
-              }
-              case ".enemyspawn": {
-                Omegga.broadcast("Added spawn");
-              }
-              case ".a": {
-                Omegga.broadcast("Added spawn");
-              }
-            }
-          }
-        }   
-      }
-    }
-
-    brs = null;
-
-    let positions = [];
+    let positions: IPlayerPositions = [];
     
     Omegga.on('join', async (player: OmeggaPlayer) => {
-      const player_data = await this.store.get<any>(`P-${player.id}`) || undefined;
+      const player_data = fns_msc.get_player_data(player.name, this.store);
       if (!player_data) {
         const new_player_data: definitions.PlayerStats =  {
           id: player.id, name: player.name, type: "player", 
@@ -57,33 +38,49 @@ export default class Plugin implements OmeggaPlugin<Config, Storage> {
           inventory_size: 10, inventory: []
         }
         await this.store.set<any>(`P-${player.id}`, new_player_data);
+        fns_msc.print(`Created new data for ${player.name}`, "", {size: 12})
       }
     })
 
-    // let interval = setInterval( async () => { // for automatic battling
-    //   positions = await Omegga.getAllPlayerPositions();
-    // }, 1500)
+    let interval = setInterval( async () => { // for automatic battling
+      positions = await Omegga.getAllPlayerPositions();
+        for (let a of fns_btl.areas) {
+          for (let p of positions) {
+            if (fns_msc.inside_range(p.pos, a.pos, a.range)) {
 
-    Omegga.on('event:battle', (player: OmeggaPlayer, ...enemies: OmeggaPlayer[]) => { // for debug
-      if (!enemies) return;
-      fns_battle.proxy_print("debug battle started");
-      fns_battle.battle_start(player);
+            }
+          }
+        }
+    }, 1500)
+
+    Omegga.on('event:battle', (player: OmeggaPlayer, others: {penemies?: OmeggaPlayer[], enemies?: definitions.PlayerStats[], area?: string}) => { // for debug
+      if (!others) return;
+      if (others.enemies)
+      
+      //if ()
+
+      fns_msc.print("debug battle started");
+      fns_btl.battle_start(player, others);
     });
 
     Omegga.on('event:attack', (player: OmeggaPlayer, attack_id: string, battle_id: string) => {
       if (!attack_id || !battle_id) return;
-      fns_battle.battle_attack(player, attack_id, battle_id);
+      fns_btl.battle_attack(player, attack_id, battle_id);
     });
 
     Omegga.on('event:flee', (player: OmeggaPlayer, battle_id: string) => {})
-
-    Omegga.on('event:idk', () => {})
 
     Omegga.on('cmd:editstat', async (speaker: string, name: string, value: string) => {
 
     })
 
-    return { registeredCommands: ['reset', 'editstat', 'fight'] };
+    Omegga.on('cmd:refreshmap', async (speaker: string,) => {
+      if (auth.find(p => p.name === speaker)) {
+        await read_map(fns_btl, fns_msc, debug);
+      }
+    })
+
+    return { registeredCommands: ['reset', 'editstat', 'fight', 'refreshmap'] };
   }
 
   async stop() {}

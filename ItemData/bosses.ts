@@ -1,0 +1,1 @@
+import * as definitions from '../o.definitions';

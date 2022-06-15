@@ -12,6 +12,6 @@ This is suppose to be a rpg battling gamemode, pve and pvp. adventure and collec
 
 ## Usage
 
-Don't use it yet.
+The plugin is not intended for public hosting and use, but its here if you really want to try, you may not get any support though.
 
-If your really curious, Kodi022#9108 on discord, ask about it, or if your in OBC just ask somewhere there too.
+If your really curious about it, mention it to `Kodi022#9108` on discord, or if your in my discord OBC just ask somewhere there.
